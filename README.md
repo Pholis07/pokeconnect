@@ -1,47 +1,61 @@
-# Pokeconnect
+# PokeConnect
 
-App móvil hecha con [Expo](https://expo.dev) y Expo Router que consume la [PokeAPI](https://pokeapi.co): muestra una lista paginada de Pokémon y reproduce su grito al tocar cada fila.
+Pokédex móvil con Expo SDK 58 y Expo Router. Incluye 1025 Pokémon, cartas reales del JCC y un pasaporte de exploración.
 
-## Requisitos
+## Funciones
 
-- [Node.js](https://nodejs.org) 20 o superior y npm
-- Una de estas opciones para ver la app:
-  - La app **Expo Go** en tu teléfono (iOS / Android)
-  - Un emulador de Android (Android Studio) o simulador de iOS (Xcode, solo macOS)
-  - Un navegador (modo web)
-- Conexión a internet (la lista y los audios vienen de PokeAPI)
+- Búsqueda por nombre o número y filtros combinados de tipo, generación y favoritos.
+- Fichas con estadísticas, descripción en español, evoluciones y condiciones, disponibles sin conexión.
+- Favoritos, equipo de seis, análisis de debilidades compartidas y comparador de dos Pokémon.
+- Descarga explícita de imágenes de las fichas y cartas para consultarlas sin conexión.
+- Cartas reales en español e inglés: búsqueda, expansión, rareza, ilustrador, ataques, álbum de favoritas y vista de baraja deslizable.
+- Combate simplificado con movimientos, PP del jugador, precisión, velocidad, ataques físicos/especiales, STAB, tipos e inmunidades. No simula estados, habilidades ni todas las reglas de los juegos oficiales.
+- Pasaporte de entrenador: tres rutas conectan exploración, equipo, victorias, fichas descargadas y cartas. Los sellos se entregan al cumplir los requisitos y se conservan al cerrar la app.
+- Modo oscuro, movimiento reducido y gestos en el hilo de UI. La baraja tiene controles por botón además del arrastre.
 
-## Cómo correrla
+Favoritos, equipo, álbum, imágenes descargadas y pasaporte se guardan **en el dispositivo**. No hay sincronización de progreso en la nube. El álbum contiene cartas favoritas, no una certificación de propiedad de cartas físicas.
 
-1. Instala las dependencias:
+## Ejecutar
 
-   ```bash
-   npm install
-   ```
+Requiere Node.js con soporte para TypeScript nativo para las pruebas (Node 22.18+), npm y Expo Go compatible con SDK 58.
 
-2. Inicia el servidor de desarrollo:
+```bash
+npm install
+npx expo start --go
+```
 
-   ```bash
-   npx expo start
-   ```
+Escanea el QR en Expo Go con el teléfono y la computadora en la misma red. Para redes con aislamiento o datos móviles:
 
-3. Abre la app según tu caso:
+```bash
+npm install --global @expo/ngrok@^4.1.0
+npx expo start --go --tunnel ngrok
+```
 
-   | Dónde | Cómo |
-   | --- | --- |
-   | Teléfono | Escanea el QR con Expo Go (Android) o la cámara (iOS). El teléfono y la PC deben estar en la misma red |
-   | Android | Con el emulador abierto, presiona `a` en la terminal |
-   | iOS | Presiona `i` en la terminal (solo macOS) |
-   | Web | Presiona `w` en la terminal |
+El túnel requiere que la computadora permanezca encendida y conectada. Su enlace puede cambiar al reiniciarlo. También están disponibles `npm run web`, `npm run android` y `npm run ios`.
 
-También hay atajos: `npm run android`, `npm run ios` y `npm run web`.
+## Datos y modo sin conexión
 
-## Scripts
+Los datos básicos de los 1025 Pokémon, tipos, estadísticas, descripciones y evoluciones vienen incluidos en `src/lib/pokemon-data.json`. No se descargan 1025 fichas para filtrar la lista. Las imágenes y las cartas nuevas requieren internet hasta descargarse. Las consultas realizadas a TCGdex se almacenan localmente.
 
-- `npm start`: servidor de desarrollo
-- `npm run lint`: revisa el código con ESLint
+El catálogo se genera desde los [CSV oficiales de PokéAPI](https://github.com/PokeAPI/pokeapi/tree/master/data/v2/csv). Para actualizar la instantánea (Python 3 y curl, sin paquetes adicionales):
 
-## Problemas comunes
+```bash
+python3 scripts/sync-pokemon-data.py
+npm test
+```
 
-- **Expo Go no conecta:** usa `npx expo start --tunnel`, o revisa que ambos equipos estén en la misma red.
-- **Cambios que no se reflejan:** reinicia con `npx expo start -c` para limpiar la caché.
+La instantánea está acotada a los números nacionales 1–1025. El simulador selecciona hasta cuatro movimientos de daño aprendidos por nivel; las especies sin movimientos de daño usan Forcejeo. No es un editor completo de movimientos.
+
+Las cartas y sus imágenes proceden de [TCGdex](https://tcgdex.dev/). Las variantes e imágenes dependen de la disponibilidad de cada idioma. Pokémon y las ilustraciones pertenecen a sus respectivos titulares.
+
+Las interacciones nativas se inspiran en [React Bits](https://reactbits.dev/get-started/index): Stack, Tilted Card, Spotlight Card, Animated Content, Count Up y Click Spark. Se implementan con React Native y Reanimated; no se ejecutan componentes DOM ni efectos WebGL en una webview.
+
+## Validación
+
+```bash
+npm run lint
+npx tsc --noEmit
+npm test
+```
+
+Las pruebas cubren el catálogo completo, límites e hidratación del progreso, daño por tipos, inmunidades, STAB, precisión, velocidad y fin del combate. La calibración de gestos, vibración y rendimiento requiere un dispositivo físico.

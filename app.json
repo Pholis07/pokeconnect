@@ -41,7 +41,10 @@
           "cameraPermission": "Permite usar la cámara en Pokeconnect.",
           "recordAudioAndroid": false
         }
-      ]
+      ],
+      "expo-image",
+      "expo-status-bar",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,

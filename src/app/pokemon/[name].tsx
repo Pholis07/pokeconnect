@@ -1,116 +1,151 @@
 import { useEffect, useState } from "react";
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
-import { Image } from "expo-image";
-import * as Haptics from "expo-haptics";
-import { router, Stack, useLocalSearchParams } from "expo-router";
-import Animated, { FadeInDown } from "react-native-reanimated";
+import { Text, View } from "react-native";
+import { router, useLocalSearchParams } from "expo-router";
+import { PokemonArtwork } from "../../components/PokemonArtwork";
 import { Button } from "../../components/Button";
 import { TypeChip } from "../../components/TypeChip";
-import { fetchPokemon, get, type Pokemon } from "../../lib/pokeapi";
-import { num, pretty, radius, TYPE_COLORS, useTheme } from "../../theme";
-
-const STAT_LABELS: Record<string, string> = {
-  hp: "PS", attack: "Ataque", defense: "Defensa",
-  "special-attack": "At. esp.", "special-defense": "Def. esp.", speed: "Velocidad",
-};
-
-const MAX_STAT = 255; // tope teórico de un stat base
+import { Choice, Copy, Page, Section, ui } from "../../components/ui";
+import { byName, byId, STAT_LABELS } from "../../lib/catalog";
+import {
+  markSeen,
+  perform,
+  toggleCompare,
+  toggleFavorite,
+  toggleTeam,
+  useTrainer,
+} from "../../lib/trainer";
+import { savePokemon } from "../../lib/offline";
+import { num, pretty, TYPE_COLORS, useTheme } from "../../theme";
 
 export default function PokemonDetail() {
   const t = useTheme();
   const { name } = useLocalSearchParams<{ name: string }>();
-  const [data, setData] = useState<{ p: Pokemon; description: string } | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
+  const p = byName.get(name);
+  const state = useTrainer();
+  const [saving, setSaving] = useState(false);
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const p = await fetchPokemon(name);
-        const s = await get(p.speciesUrl); // las formas (deoxys-normal...) no existen como species por nombre
-        const entry = s.flavor_text_entries.find((e: any) => e.language.name === "es");
-        if (cancelled) return;
-        setData({ p, description: entry ? entry.flavor_text.replace(/[\n\f]/g, " ") : "Sin descripción en español." });
-      } catch {
-        if (!cancelled) setError("No se pudo cargar este Pokémon. Revisa tu conexión.");
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [name]);
-
-  const accent = data ? (TYPE_COLORS[data.p.types[0]] ?? t.tint) : t.tint;
-
+    if (p) void perform(() => markSeen(p.name));
+  }, [p]);
+  if (!p)
+    return (
+      <Page title="Pokémon">
+        <Copy>No encontramos este Pokémon en la Pokédex nacional.</Copy>
+        <Button title="Volver a la Pokédex" onPress={() => router.replace("/")} />
+      </Page>
+    );
+  const accent = TYPE_COLORS[p.types[0]] ?? t.tint;
   return (
-    <>
-      <Stack.Screen options={{ title: pretty(name) }} />
-      {!data ? (
-        <View style={styles.center}>
-          {error ? <Text style={[styles.error, { color: t.sub }]}>{error}</Text> : <ActivityIndicator size="large" color={t.tint} />}
-        </View>
-      ) : (
-        <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={styles.content}>
-          <View style={[styles.hero, { backgroundColor: `${accent}${t.wash}` }]}>
-            <Image source={{ uri: data.p.artwork }} style={styles.artwork} contentFit="contain" />
+    <Page title={pretty(p.name)}>
+      <PokemonArtwork key={p.name} pokemon={p} accent={accent} />
+      <View style={ui.row}>
+        <Text style={[ui.big, { color: t.text, flex: 1 }]}>{pretty(p.name)}</Text>
+        <Copy>{num(p.id)}</Copy>
+      </View>
+      <View style={ui.row}>
+        {p.types.map((type) => (
+          <TypeChip key={type} type={type} />
+        ))}
+      </View>
+      <Copy>{p.description}</Copy>
+      <View style={ui.row}>
+        <Choice
+          title={state.favorites.includes(name) ? "En favoritos" : "Añadir favorito"}
+          selected={state.favorites.includes(name)}
+          onPress={() => void perform(() => toggleFavorite(name))}
+        />
+        <Choice
+          title={state.team.includes(name) ? "En mi equipo" : "Añadir al equipo"}
+          selected={state.team.includes(name)}
+          onPress={() => void perform(() => toggleTeam(name))}
+        />
+        <Choice
+          title={state.compare.includes(name) ? "En comparador" : "Comparar"}
+          selected={state.compare.includes(name)}
+          onPress={() => void perform(() => toggleCompare(name))}
+        />
+      </View>
+      <Choice
+        title={
+          saving
+            ? "Descargando imágenes…"
+            : state.saved.includes(name)
+              ? "Imágenes guardadas sin conexión"
+              : "Descargar imágenes de la ficha"
+        }
+        disabled={saving || state.saved.includes(name)}
+        selected={state.saved.includes(name)}
+        onPress={() => {
+          setSaving(true);
+          void perform(() => savePokemon(name)).finally(() => setSaving(false));
+        }}
+      />
+      <Copy>
+        Los datos de esta ficha ya están disponibles sin conexión. Descarga las imágenes para
+        completar tu guía.
+      </Copy>
+      <Button title="Entrar al combate" onPress={() => router.push(`/batalla/${p.name}`)} />
+      <Button
+        title={`Ver cartas de ${pretty(p.name)}`}
+        onPress={() =>
+          router.push({ pathname: "/cartas", params: { dex: String(p.id), pokemon: p.name } })
+        }
+      />
+      <Section title="Estadísticas base">
+        {Object.entries(p.stats).map(([stat, value]) => (
+          <View key={stat} style={{ gap: 6 }}>
+            <View style={ui.row}>
+              <Copy>{STAT_LABELS[stat] ?? stat}</Copy>
+              <Text style={{ color: t.text, fontWeight: "700", fontVariant: ["tabular-nums"] }}>
+                {value}
+              </Text>
+            </View>
+            <View
+              style={{ height: 7, borderRadius: 4, backgroundColor: t.track, overflow: "hidden" }}
+            >
+              <View
+                style={{ height: 7, width: `${(value / 255) * 100}%`, backgroundColor: accent }}
+              />
+            </View>
           </View>
-
-          <View style={styles.body}>
-            <View style={styles.titleRow}>
-              <Text style={[styles.name, { color: t.text }]}>{pretty(name)}</Text>
-              <Text style={[styles.num, { color: t.sub }]}>{num(data.p.id)}</Text>
+        ))}
+      </Section>
+      <Section title="Evoluciones">
+        {p.evolutions.length === 1 ? (
+          <Copy>Este Pokémon no tiene evoluciones registradas.</Copy>
+        ) : (
+          p.evolutions.map((e) => (
+            <View
+              key={e.id}
+              style={{ gap: 7, paddingVertical: 8, borderBottomWidth: 1, borderColor: t.line }}
+            >
+              <Choice
+                title={`${e.parent ? `${pretty(byId.get(e.parent)?.name ?? String(e.parent))} → ` : ""}${pretty(e.name)}`}
+                selected={e.name === p.name}
+                onPress={() => router.push(`/pokemon/${e.name}`)}
+              />
+              <Copy>{e.condition}</Copy>
             </View>
-
-            <View style={styles.chips}>
-              {data.p.types.map((ty) => <TypeChip key={ty} type={ty} />)}
+          ))
+        )}
+      </Section>
+      <Section title="Movimientos del simulador">
+        {p.moves.map((m) => (
+          <View key={m.id} style={{ gap: 6 }}>
+            <View style={ui.row}>
+              <Text style={{ color: t.text, fontWeight: "700" }}>{m.name}</Text>
+              <TypeChip type={m.type} small />
             </View>
-
-            <Text style={[styles.desc, { color: t.text }]}>{data.description}</Text>
-
-            <Button
-              title="Combatir"
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                router.push(`/batalla/${name}`);
-              }}
-            />
-
-            <View style={[styles.stats, { backgroundColor: t.card }]}>
-              <Text style={[styles.section, { color: t.text }]}>Estadísticas base</Text>
-              {Object.entries(data.p.stats).map(([stat, value], i) => (
-                <Animated.View key={stat} entering={FadeInDown.delay(i * 50)} style={styles.statRow}>
-                  <Text style={[styles.statLabel, { color: t.sub }]}>{STAT_LABELS[stat] ?? stat}</Text>
-                  <Text style={[styles.statValue, { color: t.text }]}>{value}</Text>
-                  <View style={[styles.track, { backgroundColor: t.track }]}>
-                    <View style={[styles.bar, { width: `${(value / MAX_STAT) * 100}%`, backgroundColor: accent }]} />
-                  </View>
-                </Animated.View>
-              ))}
-            </View>
+            <Copy>
+              Potencia {m.power} · Precisión {m.accuracy}% · {m.pp} PP ·{" "}
+              {m.category === "special" ? "Especial" : "Físico"}
+            </Copy>
           </View>
-        </ScrollView>
-      )}
-    </>
+        ))}
+        <Copy>
+          Combate simplificado con daño, precisión, PP, velocidad y tipos; sin estados ni
+          habilidades.
+        </Copy>
+      </Section>
+    </Page>
   );
 }
-
-const styles = StyleSheet.create({
-  center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
-  error: { fontSize: 16, textAlign: "center" },
-  content: { paddingBottom: 32 },
-  hero: { alignItems: "center", paddingVertical: 16, borderBottomLeftRadius: 32, borderBottomRightRadius: 32 },
-  artwork: { width: 260, height: 260 },
-  body: { padding: 20, gap: 16 },
-  titleRow: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between" },
-  name: { fontSize: 32, fontWeight: "700", textTransform: "capitalize", letterSpacing: -0.5 },
-  num: { fontSize: 17, fontVariant: ["tabular-nums"] },
-  chips: { flexDirection: "row", gap: 8 },
-  desc: { fontSize: 17, lineHeight: 24, maxWidth: 560 },
-  stats: { borderRadius: radius.card, padding: 16, gap: 12 },
-  section: { fontSize: 17, fontWeight: "600" },
-  statRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  statLabel: { width: 84, fontSize: 15 },
-  statValue: { width: 36, fontSize: 15, fontWeight: "600", textAlign: "right", fontVariant: ["tabular-nums"] },
-  track: { flex: 1, height: 8, borderRadius: 4, overflow: "hidden" },
-  bar: { height: "100%", borderRadius: 4 },
-});
