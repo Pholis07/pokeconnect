@@ -44,3 +44,10 @@ example
 
 # IDE
 .idea/
+
+# Docs internas y herramientas locales
+.impeccable/
+.vscode/
+AGENTS.md
+DESIGN.md
+PRODUCT.md
